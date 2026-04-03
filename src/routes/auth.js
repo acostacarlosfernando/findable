@@ -23,16 +23,9 @@ router.get('/start', (req, res) => {
 
 // Paso 2: Callback de OAuth - recibir el código y canjearlo por token
 router.get('/callback', async (req, res) => {
-  const fullUrl = req.originalUrl;
-  console.log('[CALLBACK] URL completa:', fullUrl);
-  console.log('[CALLBACK] Query params:', JSON.stringify(req.query));
-  req.session.lastCallbackUrl = fullUrl;
-
   const { code } = req.query;
 
   if (!code) {
-    console.log('[CALLBACK] No hay code en la URL');
-    req.session.lastError = { message: 'No code in callback URL', url: fullUrl, query: req.query };
     return req.session.save(() => {
       res.redirect('/?error=no_code');
     });
@@ -49,12 +42,8 @@ router.get('/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
-    console.log('OAuth respuesta cruda:', JSON.stringify(response.data));
-    req.session.tokenResponse = response.data;
-
     const access_token = response.data.access_token || response.data.token;
     const user_id = response.data.user_id || response.data.store_id || response.data.id;
-    console.log('OAuth parsed - token:', access_token ? 'YES' : 'NO', 'store_id:', user_id);
 
     req.session.accessToken = access_token;
     req.session.storeId = user_id;
@@ -71,7 +60,6 @@ router.get('/callback', async (req, res) => {
       data: error.response?.data
     };
     console.error('Error en OAuth callback:', JSON.stringify(errDetail));
-    req.session.lastError = errDetail;
     req.session.save(() => {
       res.redirect('/?error=auth_failed');
     });

@@ -49,48 +49,6 @@ async function setupSession() {
 
 setupSession().then(() => {
 
-  // Log de todas las requests para debug
-  const recentRequests = [];
-  app.use((req, res, next) => {
-    recentRequests.push({
-      time: new Date().toISOString(),
-      method: req.method,
-      url: req.originalUrl,
-      sessionID: req.sessionID?.substring(0, 8)
-    });
-    if (recentRequests.length > 50) recentRequests.shift();
-    next();
-  });
-
-  // Debug: ver requests recientes
-  app.get('/debug/requests', (req, res) => {
-    res.json(recentRequests);
-  });
-
-  // Debug: ver estado de sesión
-  app.get('/debug/session', (req, res) => {
-    res.json({
-      sessionID: req.sessionID,
-      hasSession: !!req.session,
-      accessToken: req.session.accessToken ? 'SET' : 'NOT SET',
-      storeId: req.session.storeId || null,
-      lastError: req.session.lastError || null,
-      lastCallbackUrl: req.session.lastCallbackUrl || null,
-      tokenResponse: req.session.tokenResponse || null,
-      cookie: req.session.cookie,
-      headers: {
-        cookie: req.headers.cookie ? 'PRESENT' : 'MISSING',
-        proto: req.protocol,
-        forwarded: req.headers['x-forwarded-proto']
-      }
-    });
-  });
-
-  // Log todas las requests a /auth para debug
-  app.use('/auth', (req, res, next) => {
-    console.log(`[AUTH] ${req.method} ${req.originalUrl} | sessionID: ${req.sessionID}`);
-    next();
-  });
   // Ruta pública: servir llms.txt por store ID
   app.get('/llms/:storeId.txt', async (req, res) => {
     try {
