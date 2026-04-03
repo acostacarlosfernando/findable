@@ -17,7 +17,7 @@ router.get('/start', (req, res) => {
     return res.redirect('/?connected=true');
   }
 
-  const authUrl = `https://www.tiendanube.com/apps/authorize/token?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(SCOPES)}`;
+  const authUrl = `https://www.tiendanube.com/apps/${CLIENT_ID}/authorize`;
   res.redirect(authUrl);
 });
 
@@ -30,11 +30,13 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
-    const response = await axios.post('https://www.tiendanube.com/apps/authorize/token', {
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      grant_type: 'authorization_code',
-      code
+    const params = new URLSearchParams();
+    params.append('client_id', CLIENT_ID);
+    params.append('client_secret', CLIENT_SECRET);
+    params.append('code', code);
+
+    const response = await axios.post('https://www.tiendanube.com/apps/authorize/token', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
     const { access_token, user_id } = response.data;

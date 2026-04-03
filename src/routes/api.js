@@ -151,17 +151,27 @@ router.get('/generate', requireAuth, async (req, res) => {
       products = demoData.products;
       pages = demoData.pages;
     } else {
-      const [storeRes, productsRes, pagesRes] = await Promise.all([
+      const [storeRes, productsRes] = await Promise.all([
         axios.get(`${TIENDANUBE_API}/${req.session.storeId}/store`, { headers: tiendanubeHeaders(req) }),
         axios.get(`${TIENDANUBE_API}/${req.session.storeId}/products`, {
           headers: tiendanubeHeaders(req),
           params: { per_page: 200, fields: 'id,name,description,handle,variants,images,categories' }
-        }),
-        axios.get(`${TIENDANUBE_API}/${req.session.storeId}/pages`, { headers: tiendanubeHeaders(req) })
+        })
       ]);
       store = storeRes.data;
       products = productsRes.data;
-      pages = pagesRes.data;
+
+      // Pages es opcional - puede fallar si no hay scope
+      try {
+        const pagesRes = await axios.get(
+          `${TIENDANUBE_API}/${req.session.storeId}/pages`,
+          { headers: tiendanubeHeaders(req) }
+        );
+        pages = pagesRes.data;
+      } catch (e) {
+        console.log('No se pudieron obtener pages (puede faltar scope):', e.message);
+        pages = [];
+      }
     }
 
     const lang = 'es';
