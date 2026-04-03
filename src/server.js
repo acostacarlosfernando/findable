@@ -56,6 +56,7 @@ setupSession().then(() => {
       hasSession: !!req.session,
       accessToken: req.session.accessToken ? 'SET' : 'NOT SET',
       storeId: req.session.storeId || null,
+      lastError: req.session.lastError || null,
       cookie: req.session.cookie,
       headers: {
         cookie: req.headers.cookie ? 'PRESENT' : 'MISSING',

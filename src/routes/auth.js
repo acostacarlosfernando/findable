@@ -51,8 +51,16 @@ router.get('/callback', async (req, res) => {
       res.redirect('/?connected=true');
     });
   } catch (error) {
-    console.error('Error en OAuth callback:', error.response?.data || error.message);
-    res.redirect('/?error=auth_failed');
+    const errDetail = {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    };
+    console.error('Error en OAuth callback:', JSON.stringify(errDetail));
+    req.session.lastError = errDetail;
+    req.session.save(() => {
+      res.redirect('/?error=auth_failed');
+    });
   }
 });
 
