@@ -258,26 +258,29 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
     const storeId = req.session.storeId;
     const pageContent = `<pre style="white-space:pre-wrap;font-family:monospace;">${content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
 
-    // Buscar si ya existe una página llms-txt
-    const { data: pages } = await axios.get(
-      `${TIENDANUBE_API}/${storeId}/pages`,
-      { headers }
-    );
+    // Paso 1: Buscar si ya existe una página llms-txt
+    let pages = [];
+    try {
+      const pagesRes = await axios.get(`${TIENDANUBE_API}/${storeId}/pages`, { headers });
+      pages = pagesRes.data;
+    } catch (e) {
+      console.log('No se pudo leer pages:', e.response?.status, e.response?.data);
+    }
+
     const existing = pages.find(p => {
       const handle = p.handle?.es || p.handle?.en || Object.values(p.handle || {})[0];
       return handle === 'llms-txt';
     });
 
+    // Paso 2: Crear o actualizar
     let result;
     if (existing) {
-      // Actualizar página existente
       result = await axios.put(
         `${TIENDANUBE_API}/${storeId}/pages/${existing.id}`,
         { content: { es: pageContent } },
         { headers }
       );
     } else {
-      // Crear página nueva
       result = await axios.post(
         `${TIENDANUBE_API}/${storeId}/pages`,
         {
@@ -289,6 +292,7 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
       );
     }
 
+    // Paso 3: Obtener dominio
     const { data: store } = await axios.get(
       `${TIENDANUBE_API}/${storeId}/store`,
       { headers }
@@ -301,10 +305,16 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
       message: existing ? 'Página llms-txt actualizada' : 'Página llms-txt creada'
     });
   } catch (error) {
-    const detail = error.response?.data || error.message;
+    const detail = {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      url: error.config?.url,
+      method: error.config?.method
+    };
     console.error('Error publicando en Tiendanube:', JSON.stringify(detail));
     res.status(500).json({
-      error: `Error al publicar: ${JSON.stringify(detail)}`
+      error: `Error al publicar (${detail.method?.toUpperCase()} ${detail.url}): ${JSON.stringify(detail.data || detail.message)}`
     });
   }
 });
