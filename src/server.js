@@ -76,6 +76,7 @@ setupSession().then(() => {
       storeId: req.session.storeId || null,
       lastError: req.session.lastError || null,
       lastCallbackUrl: req.session.lastCallbackUrl || null,
+      tokenResponse: req.session.tokenResponse || null,
       cookie: req.session.cookie,
       headers: {
         cookie: req.headers.cookie ? 'PRESENT' : 'MISSING',

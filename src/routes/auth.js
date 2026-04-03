@@ -48,8 +48,12 @@ router.get('/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
-    const { access_token, user_id } = response.data;
-    console.log('OAuth exitoso - store_id:', user_id);
+    console.log('OAuth respuesta cruda:', JSON.stringify(response.data));
+    req.session.tokenResponse = response.data;
+
+    const access_token = response.data.access_token || response.data.token;
+    const user_id = response.data.user_id || response.data.store_id || response.data.id;
+    console.log('OAuth parsed - token:', access_token ? 'YES' : 'NO', 'store_id:', user_id);
 
     req.session.accessToken = access_token;
     req.session.storeId = user_id;
