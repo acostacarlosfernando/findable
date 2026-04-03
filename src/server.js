@@ -15,34 +15,46 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Sesiones: Redis en producción, memoria en desarrollo
-let sessionStore;
-if (isProd && process.env.REDIS_URL) {
-  const { createClient } = require('redis');
-  const { RedisStore } = require('connect-redis');
-  const redisClient = createClient({ url: process.env.REDIS_URL });
-  redisClient.connect().catch(console.error);
-  sessionStore = new RedisStore({ client: redisClient });
-}
+// Sesiones: Redis en producción si disponible, sino memoria
+async function setupSession() {
+  let sessionStore;
 
-app.use(session({
-  store: sessionStore,
-  secret: process.env.SESSION_SECRET || 'findable-dev-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: isProd,
-    maxAge: 24 * 60 * 60 * 1000
+  if (process.env.REDIS_URL) {
+    try {
+      const { createClient } = require('redis');
+      const { RedisStore } = require('connect-redis');
+      const redisClient = createClient({ url: process.env.REDIS_URL });
+      await redisClient.connect();
+      sessionStore = new RedisStore({ client: redisClient });
+      console.log('Sesiones: usando Redis');
+    } catch (e) {
+      console.error('Redis no disponible, usando memoria:', e.message);
+    }
   }
-}));
 
-app.use('/auth', authRoutes);
-app.use('/api', apiRoutes);
+  app.use(session({
+    store: sessionStore,
+    secret: process.env.SESSION_SECRET || 'findable-dev-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: isProd,
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    }
+  }));
+}
+setupSession().then(() => {
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
+  app.use('/auth', authRoutes);
+  app.use('/api', apiRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Findable corriendo en http://localhost:${PORT}`);
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+  });
+
+  app.listen(PORT, () => {
+    console.log(`Findable corriendo en http://localhost:${PORT}`);
+  });
 });

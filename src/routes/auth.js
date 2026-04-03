@@ -40,11 +40,16 @@ router.get('/callback', async (req, res) => {
     });
 
     const { access_token, user_id } = response.data;
+    console.log('OAuth exitoso - store_id:', user_id);
 
     req.session.accessToken = access_token;
     req.session.storeId = user_id;
 
-    res.redirect('/?connected=true');
+    // Guardar sesión explícitamente antes de redirigir
+    req.session.save((err) => {
+      if (err) console.error('Error guardando sesión:', err);
+      res.redirect('/?connected=true');
+    });
   } catch (error) {
     console.error('Error en OAuth callback:', error.response?.data || error.message);
     res.redirect('/?error=auth_failed');
