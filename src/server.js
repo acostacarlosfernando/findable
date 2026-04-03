@@ -63,6 +63,10 @@ setupSession().then(() => {
         content = global.llmsStore?.[req.params.storeId];
       }
       if (!content) return res.status(404).send('llms.txt not found for this store');
+      res.set({
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=3600'
+      });
       res.type('text/plain').send(content);
     } catch (e) {
       res.status(500).send('Error retrieving llms.txt');

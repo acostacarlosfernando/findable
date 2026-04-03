@@ -390,7 +390,7 @@
       <div class="hosting-options">
         <div class="hosting-option selected" id="opt-tiendanube" onclick="selectHosting('tiendanube')">
           <div class="hosting-option-title">Tiendanube</div>
-          <div class="hosting-option-desc">Publicar como página en tu tienda</div>
+          <div class="hosting-option-desc">Publicar y vincular a tu tienda</div>
         </div>
         <div class="hosting-option" id="opt-ftp" onclick="selectHosting('ftp')">
           <div class="hosting-option-title">Servidor propio</div>
@@ -401,11 +401,12 @@
       <!-- Opción Tiendanube -->
       <div id="publish-tiendanube">
         <p class="step-desc" style="margin-bottom:12px;">
-          Tu archivo llms.txt va a quedar publicado en una URL pública
-          para que los LLMs puedan encontrar tu tienda.
+          Publicamos tu llms.txt e inyectamos un script en tu tienda que lo vincula
+          mediante un <code>&lt;link rel="llms"&gt;</code> y un <code>&lt;meta&gt;</code> tag
+          para que los LLMs lo descubran desde tu dominio.
         </p>
         <button class="btn btn-success" id="btn-publish-tn" onclick="publishTiendanube()">
-          Publicar llms.txt
+          Publicar y vincular
         </button>
       </div>
 
@@ -549,11 +550,11 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        showPublishResult(true, data.message, data.url);
+        showPublishResult(true, data.message, data.url, data.storeDomain);
       } catch (e) {
         showPublishResult(false, e.message);
       } finally {
-        btn.innerHTML = 'Publicar en Tiendanube';
+        btn.innerHTML = 'Publicar y vincular';
         btn.disabled = false;
       }
     }
@@ -590,12 +591,15 @@
       }
     }
 
-    function showPublishResult(success, message, url) {
+    function showPublishResult(success, message, url, storeDomain) {
       const el = document.getElementById('publish-result');
       el.classList.remove('hidden');
       if (success) {
         el.className = 'publish-result alert-success';
-        el.innerHTML = `${message}${url ? ` — <a href="${url}" target="_blank">${url}</a>` : ''}`;
+        let html = `${message}`;
+        if (url) html += `<br><strong>URL del archivo:</strong> <a href="${url}" target="_blank">${url}</a>`;
+        if (storeDomain) html += `<br><strong>Vinculado a:</strong> ${storeDomain}`;
+        el.innerHTML = html;
         document.getElementById('step-3-num').textContent = '\u2713';
         document.getElementById('step-3-num').classList.add('done');
       } else {

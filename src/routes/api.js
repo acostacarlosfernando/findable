@@ -240,16 +240,26 @@ router.get('/generate', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/publish/tiendanube - Publicar llms.txt hospedado en Findable
+// POST /api/publish/tiendanube - Publicar llms.txt y agregar script a la tienda
 router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res) => {
   const { content } = req.body;
   if (!content) return res.status(400).json({ error: 'No hay contenido para publicar' });
 
   const storeId = req.session.storeId;
   const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const publicUrl = `${baseUrl}/llms/${storeId}.txt`;
+
+  if (req.session.demoMode) {
+    return res.json({
+      ok: true,
+      url: 'https://tienda-demo.mitiendanube.com/llms.txt',
+      publicUrl,
+      message: '(Demo) llms.txt publicado y script inyectado'
+    });
+  }
 
   try {
-    // Guardar en Redis si disponible, sino en memoria
+    // Paso 1: Guardar contenido en Redis o memoria
     if (process.env.REDIS_URL) {
       const { createClient } = require('redis');
       const client = createClient({ url: process.env.REDIS_URL });
@@ -261,15 +271,70 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
       global.llmsStore[storeId] = content;
     }
 
-    const publicUrl = `${baseUrl}/llms/${storeId}.txt`;
+    // Paso 2: Inyectar script en la tienda via API de Scripts
+    const headers = tiendanubeHeaders(req);
+
+    // Primero buscar si ya existe un script de Findable
+    let existingScriptId = null;
+    try {
+      const { data: scripts } = await axios.get(
+        `${TIENDANUBE_API}/${storeId}/scripts`,
+        { headers }
+      );
+      const existing = scripts.find(s => s.src && s.src.includes('findable-llms'));
+      if (existing) existingScriptId = existing.id;
+    } catch (e) {
+      console.log('No se pudieron leer scripts:', e.response?.status);
+    }
+
+    // Crear el script que agrega el link al llms.txt en el head
+    const scriptUrl = `${baseUrl}/findable-llms.js?store=${storeId}`;
+
+    try {
+      if (existingScriptId) {
+        await axios.put(
+          `${TIENDANUBE_API}/${storeId}/scripts/${existingScriptId}`,
+          { src: scriptUrl, event: 'onload', where: 'store' },
+          { headers }
+        );
+      } else {
+        await axios.post(
+          `${TIENDANUBE_API}/${storeId}/scripts`,
+          { src: scriptUrl, event: 'onload', where: 'store' },
+          { headers }
+        );
+      }
+    } catch (e) {
+      console.error('Error inyectando script:', e.response?.data || e.message);
+      // Si falla el script, igual devolvemos éxito con la URL directa
+      return res.json({
+        ok: true,
+        url: publicUrl,
+        message: 'llms.txt publicado (sin script en tienda)',
+        scriptError: e.response?.data || e.message
+      });
+    }
+
+    // Obtener dominio de la tienda
+    let storeDomain = '';
+    try {
+      const { data: store } = await axios.get(
+        `${TIENDANUBE_API}/${storeId}/store`,
+        { headers }
+      );
+      storeDomain = store.main_domain || store.original_domain;
+    } catch (e) {
+      storeDomain = '';
+    }
 
     res.json({
       ok: true,
       url: publicUrl,
-      message: 'llms.txt publicado exitosamente'
+      storeDomain,
+      message: 'llms.txt publicado y vinculado a tu tienda'
     });
   } catch (error) {
-    console.error('Error guardando llms.txt:', error.message);
+    console.error('Error publicando llms.txt:', error.message);
     res.status(500).json({ error: 'Error al publicar el archivo' });
   }
 });
