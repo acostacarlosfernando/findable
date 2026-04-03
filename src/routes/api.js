@@ -240,82 +240,37 @@ router.get('/generate', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/publish/tiendanube - Publicar como página en Tiendanube
+// POST /api/publish/tiendanube - Publicar llms.txt hospedado en Findable
 router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res) => {
   const { content } = req.body;
   if (!content) return res.status(400).json({ error: 'No hay contenido para publicar' });
 
-  if (req.session.demoMode) {
-    return res.json({
-      ok: true,
-      url: 'https://tienda-demo.mitiendanube.com/paginas/llms-txt/',
-      message: '(Demo) Página llms-txt creada exitosamente'
-    });
-  }
+  const storeId = req.session.storeId;
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
 
   try {
-    const headers = tiendanubeHeaders(req);
-    const storeId = req.session.storeId;
-    const pageContent = `<pre style="white-space:pre-wrap;font-family:monospace;">${content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-
-    // Paso 1: Buscar si ya existe una página llms-txt
-    let pages = [];
-    try {
-      const pagesRes = await axios.get(`${TIENDANUBE_API}/${storeId}/pages`, { headers });
-      pages = pagesRes.data;
-    } catch (e) {
-      console.log('No se pudo leer pages:', e.response?.status, e.response?.data);
-    }
-
-    const existing = pages.find(p => {
-      const handle = p.handle?.es || p.handle?.en || Object.values(p.handle || {})[0];
-      return handle === 'llms-txt';
-    });
-
-    // Paso 2: Crear o actualizar
-    let result;
-    if (existing) {
-      result = await axios.put(
-        `${TIENDANUBE_API}/${storeId}/pages/${existing.id}`,
-        { content: { es: pageContent } },
-        { headers }
-      );
+    // Guardar en Redis si disponible, sino en memoria
+    if (process.env.REDIS_URL) {
+      const { createClient } = require('redis');
+      const client = createClient({ url: process.env.REDIS_URL });
+      await client.connect();
+      await client.set(`llms:${storeId}`, content);
+      await client.quit();
     } else {
-      result = await axios.post(
-        `${TIENDANUBE_API}/${storeId}/pages`,
-        {
-          title: { es: 'llms.txt' },
-          handle: { es: 'llms-txt' },
-          content: { es: pageContent }
-        },
-        { headers }
-      );
+      if (!global.llmsStore) global.llmsStore = {};
+      global.llmsStore[storeId] = content;
     }
 
-    // Paso 3: Obtener dominio
-    const { data: store } = await axios.get(
-      `${TIENDANUBE_API}/${storeId}/store`,
-      { headers }
-    );
-    const domain = store.main_domain || store.original_domain;
+    const publicUrl = `${baseUrl}/llms/${storeId}.txt`;
 
     res.json({
       ok: true,
-      url: `https://${domain}/paginas/llms-txt/`,
-      message: existing ? 'Página llms-txt actualizada' : 'Página llms-txt creada'
+      url: publicUrl,
+      message: 'llms.txt publicado exitosamente'
     });
   } catch (error) {
-    const detail = {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      url: error.config?.url,
-      method: error.config?.method
-    };
-    console.error('Error publicando en Tiendanube:', JSON.stringify(detail));
-    res.status(500).json({
-      error: `Error al publicar (${detail.method?.toUpperCase()} ${detail.url}): ${JSON.stringify(detail.data || detail.message)}`
-    });
+    console.error('Error guardando llms.txt:', error.message);
+    res.status(500).json({ error: 'Error al publicar el archivo' });
   }
 });
 

@@ -91,6 +91,26 @@ setupSession().then(() => {
     console.log(`[AUTH] ${req.method} ${req.originalUrl} | sessionID: ${req.sessionID}`);
     next();
   });
+  // Ruta pública: servir llms.txt por store ID
+  app.get('/llms/:storeId.txt', async (req, res) => {
+    try {
+      let content;
+      if (process.env.REDIS_URL) {
+        const { createClient } = require('redis');
+        const client = createClient({ url: process.env.REDIS_URL });
+        await client.connect();
+        content = await client.get(`llms:${req.params.storeId}`);
+        await client.quit();
+      } else {
+        content = global.llmsStore?.[req.params.storeId];
+      }
+      if (!content) return res.status(404).send('llms.txt not found for this store');
+      res.type('text/plain').send(content);
+    } catch (e) {
+      res.status(500).send('Error retrieving llms.txt');
+    }
+  });
+
   app.use('/auth', authRoutes);
   app.use('/api', apiRoutes);
 
