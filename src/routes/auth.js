@@ -23,10 +23,19 @@ router.get('/start', (req, res) => {
 
 // Paso 2: Callback de OAuth - recibir el código y canjearlo por token
 router.get('/callback', async (req, res) => {
+  const fullUrl = req.originalUrl;
+  console.log('[CALLBACK] URL completa:', fullUrl);
+  console.log('[CALLBACK] Query params:', JSON.stringify(req.query));
+  req.session.lastCallbackUrl = fullUrl;
+
   const { code } = req.query;
 
   if (!code) {
-    return res.status(400).send('No se recibió código de autorización');
+    console.log('[CALLBACK] No hay code en la URL');
+    req.session.lastError = { message: 'No code in callback URL', url: fullUrl, query: req.query };
+    return req.session.save(() => {
+      res.redirect('/?error=no_code');
+    });
   }
 
   try {

@@ -57,6 +57,7 @@ setupSession().then(() => {
       accessToken: req.session.accessToken ? 'SET' : 'NOT SET',
       storeId: req.session.storeId || null,
       lastError: req.session.lastError || null,
+      lastCallbackUrl: req.session.lastCallbackUrl || null,
       cookie: req.session.cookie,
       headers: {
         cookie: req.headers.cookie ? 'PRESENT' : 'MISSING',
@@ -66,6 +67,11 @@ setupSession().then(() => {
     });
   });
 
+  // Log todas las requests a /auth para debug
+  app.use('/auth', (req, res, next) => {
+    console.log(`[AUTH] ${req.method} ${req.originalUrl} | sessionID: ${req.sessionID}`);
+    next();
+  });
   app.use('/auth', authRoutes);
   app.use('/api', apiRoutes);
 
