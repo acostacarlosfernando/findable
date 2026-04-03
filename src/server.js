@@ -49,6 +49,24 @@ async function setupSession() {
 
 setupSession().then(() => {
 
+  // Log de todas las requests para debug
+  const recentRequests = [];
+  app.use((req, res, next) => {
+    recentRequests.push({
+      time: new Date().toISOString(),
+      method: req.method,
+      url: req.originalUrl,
+      sessionID: req.sessionID?.substring(0, 8)
+    });
+    if (recentRequests.length > 50) recentRequests.shift();
+    next();
+  });
+
+  // Debug: ver requests recientes
+  app.get('/debug/requests', (req, res) => {
+    res.json(recentRequests);
+  });
+
   // Debug: ver estado de sesión
   app.get('/debug/session', (req, res) => {
     res.json({
