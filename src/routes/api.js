@@ -301,8 +301,11 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
       message: existing ? 'Página llms-txt actualizada' : 'Página llms-txt creada'
     });
   } catch (error) {
-    console.error('Error publicando en Tiendanube:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Error al publicar la página en Tiendanube' });
+    const detail = error.response?.data || error.message;
+    console.error('Error publicando en Tiendanube:', JSON.stringify(detail));
+    res.status(500).json({
+      error: `Error al publicar: ${JSON.stringify(detail)}`
+    });
   }
 });
 
