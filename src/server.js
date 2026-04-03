@@ -8,14 +8,13 @@ const apiRoutes = require('./routes/api');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const isProd = process.env.NODE_ENV === 'production';
 
 app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Sesiones: Redis en producción si disponible, sino memoria
+// Sesiones: Redis si disponible, sino memoria
 async function setupSession() {
   let sessionStore;
 
@@ -30,22 +29,41 @@ async function setupSession() {
     } catch (e) {
       console.error('Redis no disponible, usando memoria:', e.message);
     }
+  } else {
+    console.log('Sesiones: usando memoria (no hay REDIS_URL)');
   }
 
   app.use(session({
     store: sessionStore,
     secret: process.env.SESSION_SECRET || 'findable-dev-secret',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     cookie: {
-      secure: isProd,
+      secure: false,
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000
     }
   }));
 }
+
 setupSession().then(() => {
+
+  // Debug: ver estado de sesión
+  app.get('/debug/session', (req, res) => {
+    res.json({
+      sessionID: req.sessionID,
+      hasSession: !!req.session,
+      accessToken: req.session.accessToken ? 'SET' : 'NOT SET',
+      storeId: req.session.storeId || null,
+      cookie: req.session.cookie,
+      headers: {
+        cookie: req.headers.cookie ? 'PRESENT' : 'MISSING',
+        proto: req.protocol,
+        forwarded: req.headers['x-forwarded-proto']
+      }
+    });
+  });
 
   app.use('/auth', authRoutes);
   app.use('/api', apiRoutes);
