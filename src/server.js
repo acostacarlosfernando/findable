@@ -8,16 +8,32 @@ const apiRoutes = require('./routes/api');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProd = process.env.NODE_ENV === 'production';
 
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Sesiones: Redis en producción, memoria en desarrollo
+let sessionStore;
+if (isProd && process.env.REDIS_URL) {
+  const { createClient } = require('redis');
+  const { RedisStore } = require('connect-redis');
+  const redisClient = createClient({ url: process.env.REDIS_URL });
+  redisClient.connect().catch(console.error);
+  sessionStore = new RedisStore({ client: redisClient });
+}
+
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || 'findable-dev-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
+  cookie: {
+    secure: isProd,
+    maxAge: 24 * 60 * 60 * 1000
+  }
 }));
 
 app.use('/auth', authRoutes);
