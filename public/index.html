@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Findable - Hacé tu tienda visible para IAs</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #6c5ce7;
+    }
+
+    .header .subtitle {
+      font-size: 13px;
+      color: #718096;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    .step {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border: 1px solid #e2e8f0;
+      transition: opacity 0.3s;
+    }
+
+    .step.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .step-number {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #6c5ce7;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .step-number.done {
+      background: #00b894;
+    }
+
+    .step-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .step-desc {
+      color: #718096;
+      font-size: 14px;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #6c5ce7;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #5a4bd1; }
+
+    .btn-success {
+      background: #00b894;
+      color: #fff;
+    }
+    .btn-success:hover { background: #00a381; }
+
+    .btn-outline {
+      background: transparent;
+      color: #6c5ce7;
+      border: 2px solid #6c5ce7;
+    }
+    .btn-outline:hover { background: #f0edfc; }
+
+    .btn-danger {
+      background: transparent;
+      color: #e17055;
+      border: 1px solid #e17055;
+      font-size: 12px;
+      padding: 6px 14px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .store-info {
+      background: #f0edfc;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .store-info strong {
+      color: #6c5ce7;
+    }
+
+    .stats {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      background: #f0edfc;
+      border-radius: 8px;
+      padding: 12px 18px;
+      text-align: center;
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #6c5ce7;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #718096;
+      margin-top: 2px;
+    }
+
+    .preview {
+      margin-top: 16px;
+      background: #1a1a2e;
+      color: #a0e8af;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden { display: none; }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .alert-error {
+      background: #ffeaea;
+      color: #c0392b;
+      border: 1px solid #f5c6cb;
+    }
+
+    .alert-success {
+      background: #e6fff5;
+      color: #00875a;
+      border: 1px solid #b5e8d5;
+    }
+
+    .hosting-options {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .hosting-option {
+      flex: 1;
+      min-width: 200px;
+      padding: 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .hosting-option:hover { border-color: #6c5ce7; background: #f9f8ff; }
+    .hosting-option.selected { border-color: #6c5ce7; background: #f0edfc; }
+
+    .hosting-option-title {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .hosting-option-desc {
+      font-size: 12px;
+      color: #718096;
+    }
+
+    .ftp-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .ftp-form input {
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .ftp-form input:focus {
+      outline: none;
+      border-color: #6c5ce7;
+      box-shadow: 0 0 0 3px rgba(108,92,231,0.1);
+    }
+
+    .ftp-form .full-width { grid-column: 1 / -1; }
+
+    .publish-result {
+      margin-top: 14px;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .publish-result a {
+      color: inherit;
+      font-weight: 600;
+    }
+
+    @media (max-width: 600px) {
+      .container { margin: 20px auto; }
+      .step { padding: 20px; }
+      .stats { flex-direction: column; }
+      .ftp-form { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Findable</h1>
+      <div class="subtitle">Hacé tu tienda visible para IAs</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="error-alert" class="alert alert-error hidden"></div>
+
+    <!-- Paso 1: Conectar tienda -->
+    <div class="step" id="step-1">
+      <div class="step-header">
+        <div class="step-number" id="step-1-num">1</div>
+        <div class="step-title">Conectar tu Tiendanube</div>
+      </div>
+      <p class="step-desc">
+        Conectá tu tienda para que Findable pueda leer tus productos y páginas.
+        Solo necesitamos permisos de lectura.
+      </p>
+      <div id="connect-section">
+        <button class="btn btn-primary" id="btn-connect" onclick="connectStore()">
+          Conectar tienda
+        </button>
+      </div>
+      <div id="connected-section" class="hidden">
+        <div class="store-info">
+          Conectada: <strong id="store-name"></strong>
+          <span id="store-domain" style="color:#718096; font-size:13px;"></span>
+        </div>
+        <div style="margin-top: 10px;">
+          <button class="btn btn-danger" onclick="disconnect()">Desconectar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paso 2: Generar llms.txt -->
+    <div class="step disabled" id="step-2">
+      <div class="step-header">
+        <div class="step-number" id="step-2-num">2</div>
+        <div class="step-title">Generar llms.txt</div>
+      </div>
+      <p class="step-desc">
+        Generamos un archivo llms.txt con toda la info de tu tienda: productos,
+        descripciones, precios y páginas de contenido, optimizado para que los LLMs
+        puedan recomendar tu tienda.
+      </p>
+      <button class="btn btn-primary" id="btn-generate" onclick="generateFile()">
+        Generar archivo
+      </button>
+      <div id="generate-stats" class="hidden">
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value" id="stat-products">0</div>
+            <div class="stat-label">Productos</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="stat-pages">0</div>
+            <div class="stat-label">Páginas</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="stat-size">0</div>
+            <div class="stat-label">Tamaño</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paso 3: Publicar -->
+    <div class="step disabled" id="step-3">
+      <div class="step-header">
+        <div class="step-number" id="step-3-num">3</div>
+        <div class="step-title">Publicar llms.txt</div>
+      </div>
+      <p class="step-desc">
+        Elegí dónde está alojada tu tienda y publicamos el archivo automáticamente.
+      </p>
+
+      <div class="hosting-options">
+        <div class="hosting-option selected" id="opt-tiendanube" onclick="selectHosting('tiendanube')">
+          <div class="hosting-option-title">Tiendanube</div>
+          <div class="hosting-option-desc">Publicar como página en tu tienda</div>
+        </div>
+        <div class="hosting-option" id="opt-ftp" onclick="selectHosting('ftp')">
+          <div class="hosting-option-title">Servidor propio</div>
+          <div class="hosting-option-desc">Subir por FTP a tu hosting</div>
+        </div>
+      </div>
+
+      <!-- Opción Tiendanube -->
+      <div id="publish-tiendanube">
+        <p class="step-desc" style="margin-bottom:12px;">
+          Se va a crear una página en tu tienda con el contenido del llms.txt,
+          accesible en <strong>/paginas/llms-txt/</strong>
+        </p>
+        <button class="btn btn-success" id="btn-publish-tn" onclick="publishTiendanube()">
+          Publicar en Tiendanube
+        </button>
+      </div>
+
+      <!-- Opción FTP -->
+      <div id="publish-ftp" class="hidden">
+        <div class="ftp-form">
+          <input type="text" id="ftp-host" placeholder="Host (ej: ftp.mitienda.com)">
+          <input type="text" id="ftp-user" placeholder="Usuario FTP">
+          <input type="password" id="ftp-pass" placeholder="Contraseña FTP">
+          <input type="text" id="ftp-path" placeholder="Ruta (opcional, ej: /public_html)">
+        </div>
+        <button class="btn btn-success" id="btn-publish-ftp" onclick="publishFtp()">
+          Subir por FTP
+        </button>
+      </div>
+
+      <div id="publish-result" class="hidden"></div>
+
+      <div class="preview" id="preview-content" style="margin-top:16px;"></div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="btn btn-outline" onclick="downloadFile()">
+          Descargar copia
+        </button>
+        <button class="btn btn-outline" onclick="copyToClipboard()">
+          Copiar al portapapeles
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let llmsContent = '';
+
+    // Revisar estado al cargar
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('error')) {
+        showError('Error al conectar con Tiendanube. Intentá de nuevo.');
+        window.history.replaceState({}, '', '/');
+      }
+      if (params.get('connected')) {
+        window.history.replaceState({}, '', '/');
+      }
+      checkAuthStatus();
+    });
+
+    async function checkAuthStatus() {
+      try {
+        const res = await fetch('/auth/status');
+        const data = await res.json();
+        if (data.connected) {
+          showConnected();
+          loadStoreInfo();
+        }
+      } catch (e) {
+        console.error('Error verificando estado:', e);
+      }
+    }
+
+    function connectStore() {
+      window.location.href = '/auth/start';
+    }
+
+    async function disconnect() {
+      await fetch('/auth/disconnect', { method: 'POST' });
+      location.reload();
+    }
+
+    async function loadStoreInfo() {
+      try {
+        const res = await fetch('/api/store');
+        const store = await res.json();
+        document.getElementById('store-name').textContent = store.name;
+        document.getElementById('store-domain').textContent = ` (${store.domain})`;
+      } catch (e) {
+        console.error('Error cargando info de tienda:', e);
+      }
+    }
+
+    function showConnected() {
+      document.getElementById('connect-section').classList.add('hidden');
+      document.getElementById('connected-section').classList.remove('hidden');
+      document.getElementById('step-1-num').textContent = '\u2713';
+      document.getElementById('step-1-num').classList.add('done');
+      document.getElementById('step-2').classList.remove('disabled');
+    }
+
+    async function generateFile() {
+      const btn = document.getElementById('btn-generate');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Generando...';
+
+      try {
+        const res = await fetch('/api/generate');
+        if (!res.ok) throw new Error('Error al generar');
+        const data = await res.json();
+
+        llmsContent = data.content;
+
+        document.getElementById('stat-products').textContent = data.stats.products;
+        document.getElementById('stat-pages').textContent = data.stats.pages;
+        document.getElementById('stat-size').textContent = formatBytes(data.stats.size);
+        document.getElementById('generate-stats').classList.remove('hidden');
+
+        document.getElementById('preview-content').textContent = llmsContent;
+
+        document.getElementById('step-2-num').textContent = '\u2713';
+        document.getElementById('step-2-num').classList.add('done');
+        document.getElementById('step-3').classList.remove('disabled');
+
+        btn.innerHTML = 'Regenerar archivo';
+        btn.disabled = false;
+      } catch (e) {
+        showError('Error al generar el archivo. Intentá de nuevo.');
+        btn.innerHTML = 'Generar archivo';
+        btn.disabled = false;
+      }
+    }
+
+    let selectedHosting = 'tiendanube';
+
+    function selectHosting(type) {
+      selectedHosting = type;
+      document.getElementById('opt-tiendanube').classList.toggle('selected', type === 'tiendanube');
+      document.getElementById('opt-ftp').classList.toggle('selected', type === 'ftp');
+      document.getElementById('publish-tiendanube').classList.toggle('hidden', type !== 'tiendanube');
+      document.getElementById('publish-ftp').classList.toggle('hidden', type !== 'ftp');
+      document.getElementById('publish-result').classList.add('hidden');
+    }
+
+    async function publishTiendanube() {
+      const btn = document.getElementById('btn-publish-tn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Publicando...';
+
+      try {
+        const res = await fetch('/api/publish/tiendanube', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: llmsContent })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showPublishResult(true, data.message, data.url);
+      } catch (e) {
+        showPublishResult(false, e.message);
+      } finally {
+        btn.innerHTML = 'Publicar en Tiendanube';
+        btn.disabled = false;
+      }
+    }
+
+    async function publishFtp() {
+      const btn = document.getElementById('btn-publish-ftp');
+      const host = document.getElementById('ftp-host').value.trim();
+      const user = document.getElementById('ftp-user').value.trim();
+      const password = document.getElementById('ftp-pass').value;
+      const path = document.getElementById('ftp-path').value.trim();
+
+      if (!host || !user || !password) {
+        showError('Completá host, usuario y contraseña FTP');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Subiendo...';
+
+      try {
+        const res = await fetch('/api/publish/ftp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: llmsContent, host, user, password, path })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showPublishResult(true, data.message, data.url);
+      } catch (e) {
+        showPublishResult(false, e.message);
+      } finally {
+        btn.innerHTML = 'Subir por FTP';
+        btn.disabled = false;
+      }
+    }
+
+    function showPublishResult(success, message, url) {
+      const el = document.getElementById('publish-result');
+      el.classList.remove('hidden');
+      if (success) {
+        el.className = 'publish-result alert-success';
+        el.innerHTML = `${message}${url ? ` — <a href="${url}" target="_blank">${url}</a>` : ''}`;
+        document.getElementById('step-3-num').textContent = '\u2713';
+        document.getElementById('step-3-num').classList.add('done');
+      } else {
+        el.className = 'publish-result alert-error';
+        el.textContent = message;
+      }
+    }
+
+    function downloadFile() {
+      const blob = new Blob([llmsContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'llms.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function copyToClipboard() {
+      try {
+        await navigator.clipboard.writeText(llmsContent);
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.textContent = 'Copiado!';
+        setTimeout(() => btn.textContent = original, 2000);
+      } catch (e) {
+        showError('No se pudo copiar al portapapeles');
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-alert');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      setTimeout(() => el.classList.add('hidden'), 5000);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      return (bytes / 1024).toFixed(1) + ' KB';
+    }
+  </script>
+</body>
+</html>

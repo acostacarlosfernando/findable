@@ -1,0 +1,21 @@
+{
+  "name": "findable",
+  "version": "1.0.0",
+  "description": "App para Tiendanube que genera archivos llms.txt para que las tiendas sean recomendadas por LLMs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "basic-ftp": "^5.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
