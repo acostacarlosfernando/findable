@@ -42,6 +42,7 @@ router.get('/callback', async (req, res) => {
     const params = new URLSearchParams();
     params.append('client_id', CLIENT_ID);
     params.append('client_secret', CLIENT_SECRET);
+    params.append('grant_type', 'authorization_code');
     params.append('code', code);
 
     const response = await axios.post('https://www.tiendanube.com/apps/authorize/token', params, {
