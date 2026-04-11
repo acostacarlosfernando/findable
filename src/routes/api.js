@@ -7,6 +7,39 @@ const router = express.Router();
 
 const TIENDANUBE_API = 'https://api.tiendanube.com/v1';
 
+// Convertir contenido llms.txt (markdown-like) a HTML semántico para página de Tiendanube
+function llmsToHtml(content) {
+  const lines = content.split('\n');
+  let html = '';
+  let inList = false;
+
+  for (const line of lines) {
+    if (line.startsWith('### ')) {
+      if (inList) { html += '</ul>\n'; inList = false; }
+      html += `<h3>${line.slice(4)}</h3>\n`;
+    } else if (line.startsWith('## ')) {
+      if (inList) { html += '</ul>\n'; inList = false; }
+      html += `<h2>${line.slice(3)}</h2>\n`;
+    } else if (line.startsWith('# ')) {
+      if (inList) { html += '</ul>\n'; inList = false; }
+      html += `<h1>${line.slice(2)}</h1>\n`;
+    } else if (line.startsWith('> ')) {
+      if (inList) { html += '</ul>\n'; inList = false; }
+      html += `<blockquote><p>${line.slice(2)}</p></blockquote>\n`;
+    } else if (line.startsWith('- ')) {
+      if (!inList) { html += '<ul>\n'; inList = true; }
+      html += `<li>${line.slice(2)}</li>\n`;
+    } else if (line.trim() === '') {
+      if (inList) { html += '</ul>\n'; inList = false; }
+    } else {
+      if (inList) { html += '</ul>\n'; inList = false; }
+      html += `<p>${line}</p>\n`;
+    }
+  }
+  if (inList) html += '</ul>\n';
+  return html;
+}
+
 // Middleware: verificar que hay sesión autenticada
 function requireAuth(req, res, next) {
   if (!req.session.accessToken || !req.session.storeId) {
@@ -32,9 +65,7 @@ router.get('/store', requireAuth, async (req, res) => {
       name: s.name.es,
       description: s.description.es,
       domain: s.main_domain,
-      logo: null,
-      email: s.email,
-      business_name: s.business_name
+      logo: null
     });
   }
 
@@ -43,14 +74,16 @@ router.get('/store', requireAuth, async (req, res) => {
       `${TIENDANUBE_API}/${req.session.storeId}/store`,
       { headers: tiendanubeHeaders(req) }
     );
+    // Preferir dominio personalizado sobre subdominio de Tiendanube
+    const customDomain = (data.domains || []).find(d => !d.includes('.mitiendanube.com') && !d.includes('.nuvemshop.com'));
+    const domain = customDomain || data.original_domain || data.main_domain;
+
     res.json({
       id: data.id,
       name: data.name?.es || data.name?.en || Object.values(data.name || {})[0] || 'Tienda',
       description: data.description?.es || data.description?.en || Object.values(data.description || {})[0] || '',
-      domain: data.main_domain || data.original_domain,
-      logo: data.logo?.src || null,
-      email: data.email,
-      business_name: data.business_name
+      domain,
+      logo: data.logo?.src || null
     });
   } catch (error) {
     console.error('Error obteniendo store:', error.response?.data || error.message);
@@ -177,19 +210,20 @@ router.get('/generate', requireAuth, async (req, res) => {
     const lang = 'es';
     const getText = (obj) => obj?.[lang] || obj?.en || Object.values(obj || {})[0] || '';
     const stripHtml = (str) => str.replace(/<[^>]*>/g, '').trim();
-    const domain = store.main_domain || store.original_domain;
+
+    // Preferir dominio personalizado sobre subdominio de Tiendanube
+    const customDomain = (store.domains || []).find(d => !d.includes('.mitiendanube.com') && !d.includes('.nuvemshop.com'));
+    const domain = customDomain || store.original_domain || store.main_domain;
 
     let llmsTxt = '';
 
-    // Encabezado
+    // Encabezado (sin datos sensibles: email ni razón social)
     llmsTxt += `# ${getText(store.name)}\n\n`;
     const desc = stripHtml(getText(store.description));
     if (desc) {
       llmsTxt += `> ${desc}\n\n`;
     }
-    llmsTxt += `- Dominio: ${domain}\n`;
-    if (store.email) llmsTxt += `- Contacto: ${store.email}\n`;
-    if (store.business_name) llmsTxt += `- Razón social: ${store.business_name}\n`;
+    llmsTxt += `- Dominio: https://${domain}\n`;
     llmsTxt += '\n';
 
     // Productos
@@ -240,26 +274,39 @@ router.get('/generate', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/publish/tiendanube - Publicar llms.txt y agregar script a la tienda
+// POST /api/publish/tiendanube - Publicar llms.txt (página en dominio + archivo TXT externo)
 router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res) => {
   const { content } = req.body;
   if (!content) return res.status(400).json({ error: 'No hay contenido para publicar' });
 
   const storeId = req.session.storeId;
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const publicUrl = `${baseUrl}/llms/${storeId}.txt`;
+  const txtUrl = `${baseUrl}/llms/${storeId}.txt`;
 
   if (req.session.demoMode) {
     return res.json({
       ok: true,
-      url: 'https://tienda-demo.mitiendanube.com/llms.txt',
-      publicUrl,
-      message: '(Demo) llms.txt publicado y script inyectado'
+      pageUrl: 'https://tienda-demo.mitiendanube.com/llms/',
+      txtUrl,
+      storeDomain: 'tienda-demo.mitiendanube.com',
+      message: '(Demo) Página y archivo llms.txt publicados'
     });
   }
 
+  const headers = tiendanubeHeaders(req);
+  const result = { ok: true, txtUrl, pageUrl: null, storeDomain: '', pageCreated: false, errors: [] };
+
   try {
-    // Paso 1: Guardar contenido en Redis o memoria
+    // Paso 1: Obtener datos de la tienda (dominio)
+    try {
+      const { data: store } = await axios.get(`${TIENDANUBE_API}/${storeId}/store`, { headers });
+      const custom = (store.domains || []).find(d => !d.includes('.mitiendanube.com') && !d.includes('.nuvemshop.com'));
+      result.storeDomain = custom || store.original_domain || store.main_domain || '';
+    } catch (e) {
+      console.error('Error obteniendo store:', e.response?.data || e.message);
+    }
+
+    // Paso 2: Guardar contenido en Redis o memoria (archivo TXT externo)
     if (process.env.REDIS_URL) {
       const { createClient } = require('redis');
       const client = createClient({ url: process.env.REDIS_URL });
@@ -271,24 +318,63 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
       global.llmsStore[storeId] = content;
     }
 
-    // Paso 2: Inyectar script en la tienda via API de Scripts
-    const headers = tiendanubeHeaders(req);
+    // Paso 3: Crear/actualizar página en Tiendanube (contenido on-domain)
+    const htmlContent = llmsToHtml(content);
+    const pageHandle = 'llms';
+    let existingPageId = null;
 
-    // Primero buscar si ya existe un script de Findable
+    try {
+      // Buscar si ya existe la página "llms"
+      const { data: pages } = await axios.get(`${TIENDANUBE_API}/${storeId}/pages`, { headers });
+      const existing = pages.find(p => {
+        const h = p.handle?.es || p.handle?.en || Object.values(p.handle || {})[0] || '';
+        return h === pageHandle;
+      });
+      if (existing) existingPageId = existing.id;
+    } catch (e) {
+      console.log('No se pudieron leer páginas:', e.response?.status);
+    }
+
+    try {
+      if (existingPageId) {
+        await axios.put(
+          `${TIENDANUBE_API}/${storeId}/pages/${existingPageId}`,
+          { content: { es: htmlContent } },
+          { headers }
+        );
+      } else {
+        await axios.post(
+          `${TIENDANUBE_API}/${storeId}/pages`,
+          {
+            title: { es: 'Información para asistentes de IA' },
+            handle: { es: pageHandle },
+            content: { es: htmlContent }
+          },
+          { headers }
+        );
+      }
+      result.pageCreated = true;
+      if (result.storeDomain) {
+        result.pageUrl = `https://${result.storeDomain}/${pageHandle}/`;
+      }
+    } catch (e) {
+      const errDetail = e.response?.data || e.message;
+      console.error('Error creando página:', e.response?.status, errDetail);
+      result.errors.push({ step: 'page', status: e.response?.status, detail: errDetail });
+    }
+
+    // Paso 4: Inyectar/actualizar script en la tienda (meta tags para descubrimiento)
     let existingScriptId = null;
     try {
-      const { data: scripts } = await axios.get(
-        `${TIENDANUBE_API}/${storeId}/scripts`,
-        { headers }
-      );
+      const { data: scripts } = await axios.get(`${TIENDANUBE_API}/${storeId}/scripts`, { headers });
       const existing = scripts.find(s => s.src && s.src.includes('findable-llms'));
       if (existing) existingScriptId = existing.id;
     } catch (e) {
       console.log('No se pudieron leer scripts:', e.response?.status);
     }
 
-    // Crear el script que agrega el link al llms.txt en el head
-    const scriptUrl = `${baseUrl}/findable-llms.js?store=${storeId}`;
+    const scriptParams = `store=${storeId}` + (result.pageCreated ? `&page=${pageHandle}` : '');
+    const scriptUrl = `${baseUrl}/findable-llms.js?${scriptParams}`;
 
     try {
       if (existingScriptId) {
@@ -305,37 +391,26 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
         );
       }
     } catch (e) {
-      console.error('Error inyectando script:', e.response?.data || e.message);
-      // Si falla el script, igual devolvemos éxito con la URL directa
-      return res.json({
-        ok: true,
-        url: publicUrl,
-        message: 'llms.txt publicado (sin script en tienda)',
-        scriptError: e.response?.data || e.message
-      });
+      const errDetail = e.response?.data || e.message;
+      console.error('Error inyectando script:', e.response?.status, errDetail);
+      result.errors.push({ step: 'script', status: e.response?.status, detail: errDetail });
     }
 
-    // Obtener dominio de la tienda
-    let storeDomain = '';
-    try {
-      const { data: store } = await axios.get(
-        `${TIENDANUBE_API}/${storeId}/store`,
-        { headers }
-      );
-      storeDomain = store.main_domain || store.original_domain;
-    } catch (e) {
-      storeDomain = '';
+    // Construir mensaje según lo que funcionó
+    if (result.pageCreated && result.errors.length === 0) {
+      result.message = 'Página y archivo llms.txt publicados exitosamente';
+    } else if (result.pageCreated) {
+      result.message = 'Página publicada. Archivo TXT disponible como respaldo.';
+    } else if (result.errors.length > 0) {
+      result.message = 'Archivo TXT publicado. No se pudo crear la página en tu tienda (podés crearla manualmente).';
+    } else {
+      result.message = 'Archivo llms.txt publicado';
     }
 
-    res.json({
-      ok: true,
-      url: publicUrl,
-      storeDomain,
-      message: 'llms.txt publicado y vinculado a tu tienda'
-    });
+    res.json(result);
   } catch (error) {
-    console.error('Error publicando llms.txt:', error.message);
-    res.status(500).json({ error: 'Error al publicar el archivo' });
+    console.error('Error publicando:', error.message);
+    res.status(500).json({ error: 'Error al publicar' });
   }
 });
 

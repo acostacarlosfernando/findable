@@ -401,12 +401,12 @@
       <!-- Opción Tiendanube -->
       <div id="publish-tiendanube">
         <p class="step-desc" style="margin-bottom:12px;">
-          Publicamos tu llms.txt e inyectamos un script en tu tienda que lo vincula
-          mediante un <code>&lt;link rel="llms"&gt;</code> y un <code>&lt;meta&gt;</code> tag
-          para que los LLMs lo descubran desde tu dominio.
+          Creamos una página en tu tienda con toda la info y además publicamos
+          un archivo llms.txt como respaldo. Los LLMs podrán descubrir tu tienda
+          directamente desde tu dominio.
         </p>
         <button class="btn btn-success" id="btn-publish-tn" onclick="publishTiendanube()">
-          Publicar y vincular
+          Publicar en mi tienda
         </button>
       </div>
 
@@ -550,11 +550,11 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        showPublishResult(true, data.message, data.url, data.storeDomain);
+        showPublishResult(true, data);
       } catch (e) {
-        showPublishResult(false, e.message);
+        showPublishResult(false, { message: e.message });
       } finally {
-        btn.innerHTML = 'Publicar y vincular';
+        btn.innerHTML = 'Publicar en mi tienda';
         btn.disabled = false;
       }
     }
@@ -582,29 +582,40 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        showPublishResult(true, data.message, data.url);
+        showPublishResult(true, { message: data.message, txtUrl: data.url });
       } catch (e) {
-        showPublishResult(false, e.message);
+        showPublishResult(false, { message: e.message });
       } finally {
         btn.innerHTML = 'Subir por FTP';
         btn.disabled = false;
       }
     }
 
-    function showPublishResult(success, message, url, storeDomain) {
+    function showPublishResult(success, data) {
       const el = document.getElementById('publish-result');
       el.classList.remove('hidden');
       if (success) {
         el.className = 'publish-result alert-success';
-        let html = `${message}`;
-        if (url) html += `<br><strong>URL del archivo:</strong> <a href="${url}" target="_blank">${url}</a>`;
-        if (storeDomain) html += `<br><strong>Vinculado a:</strong> ${storeDomain}`;
+        let html = `<strong>${data.message}</strong>`;
+        if (data.pageUrl) {
+          html += `<br>Pagina en tu dominio: <a href="${data.pageUrl}" target="_blank">${data.pageUrl}</a>`;
+        }
+        if (data.txtUrl) {
+          html += `<br>Archivo TXT: <a href="${data.txtUrl}" target="_blank">${data.txtUrl}</a>`;
+        }
+        if (data.errors && data.errors.length > 0) {
+          const pageErr = data.errors.find(e => e.step === 'page');
+          if (pageErr) {
+            html += `<br><br><em style="color:#e17055;">No se pudo crear la pagina automaticamente.
+              Podes crearla manualmente en Tiendanube Admin > Paginas, con handle "llms" y pegando el contenido HTML.</em>`;
+          }
+        }
         el.innerHTML = html;
         document.getElementById('step-3-num').textContent = '\u2713';
         document.getElementById('step-3-num').classList.add('done');
       } else {
         el.className = 'publish-result alert-error';
-        el.textContent = message;
+        el.textContent = data.message;
       }
     }
 

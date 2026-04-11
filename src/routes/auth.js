@@ -6,7 +6,7 @@ const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const CLIENT_ID = process.env.TIENDANUBE_CLIENT_ID;
 const CLIENT_SECRET = process.env.TIENDANUBE_CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:3000/auth/callback';
-const SCOPES = 'read_products read_content write_content write_pages';
+const SCOPES = 'read_products read_content write_content write_pages write_scripts';
 
 // Paso 1: Iniciar flujo OAuth con Tiendanube
 router.get('/start', (req, res) => {
