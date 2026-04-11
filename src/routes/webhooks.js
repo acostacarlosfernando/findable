@@ -81,4 +81,37 @@ router.post('/product', express.raw({ type: 'application/json' }), async (req, r
   }
 });
 
+// POST /webhooks/store-redact - Tiendanube pide borrar datos de una tienda que desinstaló
+router.post('/store-redact', express.json(), async (req, res) => {
+  const storeId = req.body?.store_id;
+  console.log(`Privacy webhook: store redact para tienda ${storeId}`);
+
+  if (storeId) {
+    try {
+      // Borrar token y llms.txt almacenados
+      await saveToRedis(`token:${storeId}`, '');
+      await saveToRedis(`llms:${storeId}`, '');
+      console.log(`Datos eliminados para tienda ${storeId}`);
+    } catch (e) {
+      console.error('Error borrando datos de tienda:', e.message);
+    }
+  }
+
+  res.status(200).json({ ok: true });
+});
+
+// POST /webhooks/customers-redact - Tiendanube pide borrar datos de un cliente
+router.post('/customers-redact', express.json(), (req, res) => {
+  // Findable no almacena datos de clientes, solo productos
+  console.log('Privacy webhook: customers redact (no hay datos de clientes almacenados)');
+  res.status(200).json({ ok: true });
+});
+
+// POST /webhooks/customers-data-request - Un cliente pide copia de sus datos
+router.post('/customers-data-request', express.json(), (req, res) => {
+  // Findable no almacena datos de clientes
+  console.log('Privacy webhook: customers data request (no hay datos de clientes almacenados)');
+  res.status(200).json({ ok: true });
+});
+
 module.exports = router;
