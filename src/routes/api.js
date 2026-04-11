@@ -3,42 +3,8 @@ const axios = require('axios');
 const ftp = require('basic-ftp');
 const { Readable } = require('stream');
 const demoData = require('../demo-data');
+const { TIENDANUBE_API, tiendanubeHeaders: makeHeaders, getText, stripHtml, getCustomDomain, llmsToHtml, saveToRedis } = require('../utils');
 const router = express.Router();
-
-const TIENDANUBE_API = 'https://api.tiendanube.com/v1';
-
-// Convertir contenido llms.txt (markdown-like) a HTML semántico para página de Tiendanube
-function llmsToHtml(content) {
-  const lines = content.split('\n');
-  let html = '';
-  let inList = false;
-
-  for (const line of lines) {
-    if (line.startsWith('### ')) {
-      if (inList) { html += '</ul>\n'; inList = false; }
-      html += `<h3>${line.slice(4)}</h3>\n`;
-    } else if (line.startsWith('## ')) {
-      if (inList) { html += '</ul>\n'; inList = false; }
-      html += `<h2>${line.slice(3)}</h2>\n`;
-    } else if (line.startsWith('# ')) {
-      if (inList) { html += '</ul>\n'; inList = false; }
-      html += `<h1>${line.slice(2)}</h1>\n`;
-    } else if (line.startsWith('> ')) {
-      if (inList) { html += '</ul>\n'; inList = false; }
-      html += `<blockquote><p>${line.slice(2)}</p></blockquote>\n`;
-    } else if (line.startsWith('- ')) {
-      if (!inList) { html += '<ul>\n'; inList = true; }
-      html += `<li>${line.slice(2)}</li>\n`;
-    } else if (line.trim() === '') {
-      if (inList) { html += '</ul>\n'; inList = false; }
-    } else {
-      if (inList) { html += '</ul>\n'; inList = false; }
-      html += `<p>${line}</p>\n`;
-    }
-  }
-  if (inList) html += '</ul>\n';
-  return html;
-}
 
 // Middleware: verificar que hay sesión autenticada
 function requireAuth(req, res, next) {
@@ -49,11 +15,7 @@ function requireAuth(req, res, next) {
 }
 
 function tiendanubeHeaders(req) {
-  return {
-    'Authentication': `bearer ${req.session.accessToken}`,
-    'User-Agent': 'Findable (findable@app.com)',
-    'Content-Type': 'application/json'
-  };
+  return makeHeaders(req.session.accessToken);
 }
 
 // GET /api/store - Datos de la tienda
@@ -74,15 +36,11 @@ router.get('/store', requireAuth, async (req, res) => {
       `${TIENDANUBE_API}/${req.session.storeId}/store`,
       { headers: tiendanubeHeaders(req) }
     );
-    // Preferir dominio personalizado sobre subdominio de Tiendanube
-    const customDomain = (data.domains || []).find(d => !d.includes('.mitiendanube.com') && !d.includes('.nuvemshop.com'));
-    const domain = customDomain || data.original_domain || data.main_domain;
-
     res.json({
       id: data.id,
-      name: data.name?.es || data.name?.en || Object.values(data.name || {})[0] || 'Tienda',
-      description: data.description?.es || data.description?.en || Object.values(data.description || {})[0] || '',
-      domain,
+      name: getText(data.name),
+      description: getText(data.description),
+      domain: getCustomDomain(data),
       logo: data.logo?.src || null
     });
   } catch (error) {
@@ -177,95 +135,40 @@ router.get('/pages', requireAuth, async (req, res) => {
 // GET /api/generate - Generar el archivo llms.txt
 router.get('/generate', requireAuth, async (req, res) => {
   try {
-    let store, products, pages;
+    let result;
 
     if (req.session.demoMode) {
-      store = demoData.store;
-      products = demoData.products;
-      pages = demoData.pages;
-    } else {
-      const [storeRes, productsRes] = await Promise.all([
-        axios.get(`${TIENDANUBE_API}/${req.session.storeId}/store`, { headers: tiendanubeHeaders(req) }),
-        axios.get(`${TIENDANUBE_API}/${req.session.storeId}/products`, {
-          headers: tiendanubeHeaders(req),
-          params: { per_page: 200, fields: 'id,name,description,handle,variants,images,categories' }
-        })
-      ]);
-      store = storeRes.data;
-      products = productsRes.data;
+      // En demo, construir contenido desde datos locales
+      const store = demoData.store;
+      const products = demoData.products;
+      const pages = demoData.pages;
+      const domain = store.main_domain;
 
-      // Pages es opcional - puede fallar si no hay scope
-      try {
-        const pagesRes = await axios.get(
-          `${TIENDANUBE_API}/${req.session.storeId}/pages`,
-          { headers: tiendanubeHeaders(req) }
-        );
-        pages = pagesRes.data;
-      } catch (e) {
-        console.log('No se pudieron obtener pages (puede faltar scope):', e.message);
-        pages = [];
-      }
-    }
+      let llmsTxt = `# ${getText(store.name)}\n\n`;
+      const desc = stripHtml(getText(store.description));
+      if (desc) llmsTxt += `> ${desc}\n\n`;
+      llmsTxt += `- Dominio: https://${domain}\n\n`;
 
-    const lang = 'es';
-    const getText = (obj) => obj?.[lang] || obj?.en || Object.values(obj || {})[0] || '';
-    const stripHtml = (str) => str.replace(/<[^>]*>/g, '').trim();
-
-    // Preferir dominio personalizado sobre subdominio de Tiendanube
-    const customDomain = (store.domains || []).find(d => !d.includes('.mitiendanube.com') && !d.includes('.nuvemshop.com'));
-    const domain = customDomain || store.original_domain || store.main_domain;
-
-    let llmsTxt = '';
-
-    // Encabezado (sin datos sensibles: email ni razón social)
-    llmsTxt += `# ${getText(store.name)}\n\n`;
-    const desc = stripHtml(getText(store.description));
-    if (desc) {
-      llmsTxt += `> ${desc}\n\n`;
-    }
-    llmsTxt += `- Dominio: https://${domain}\n`;
-    llmsTxt += '\n';
-
-    // Productos
-    if (products.length) {
-      llmsTxt += `## Productos\n\n`;
       for (const p of products) {
-        const name = getText(p.name);
-        const handle = getText(p.handle);
+        llmsTxt += `### ${getText(p.name)}\n`;
         const pdesc = stripHtml(getText(p.description));
-        const price = p.variants?.[0]?.price;
-        const cats = (p.categories || []).map(c => getText(c.name)).filter(Boolean);
-
-        llmsTxt += `### ${name}\n`;
         if (pdesc) llmsTxt += `${pdesc}\n`;
-        if (price) llmsTxt += `- Precio: $${price}\n`;
-        if (cats.length) llmsTxt += `- Categorías: ${cats.join(', ')}\n`;
-        if (handle) llmsTxt += `- URL: https://${domain}/productos/${handle}\n`;
+        if (p.variants?.[0]?.price) llmsTxt += `- Precio: $${p.variants[0].price}\n`;
         llmsTxt += '\n';
       }
-    }
 
-    // Páginas
-    if (pages.length) {
-      llmsTxt += `## Páginas\n\n`;
-      for (const p of pages) {
-        const title = getText(p.title);
-        const handle = getText(p.handle);
-        const content = stripHtml(getText(p.content));
-
-        llmsTxt += `### ${title}\n`;
-        if (content) llmsTxt += `${content}\n`;
-        if (handle) llmsTxt += `- URL: https://${domain}/${handle}\n`;
-        llmsTxt += '\n';
-      }
+      result = { content: llmsTxt, products, pages };
+    } else {
+      const { generateContent } = require('../utils');
+      result = await generateContent(req.session.storeId, req.session.accessToken);
     }
 
     res.json({
-      content: llmsTxt,
+      content: result.content,
       stats: {
-        products: products.length,
-        pages: pages.length,
-        size: Buffer.byteLength(llmsTxt, 'utf8')
+        products: result.products.length,
+        pages: result.pages.length,
+        size: Buffer.byteLength(result.content, 'utf8')
       }
     });
   } catch (error) {
@@ -300,23 +203,13 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
     // Paso 1: Obtener datos de la tienda (dominio)
     try {
       const { data: store } = await axios.get(`${TIENDANUBE_API}/${storeId}/store`, { headers });
-      const custom = (store.domains || []).find(d => !d.includes('.mitiendanube.com') && !d.includes('.nuvemshop.com'));
-      result.storeDomain = custom || store.original_domain || store.main_domain || '';
+      result.storeDomain = getCustomDomain(store);
     } catch (e) {
       console.error('Error obteniendo store:', e.response?.data || e.message);
     }
 
     // Paso 2: Guardar contenido en Redis o memoria (archivo TXT externo)
-    if (process.env.REDIS_URL) {
-      const { createClient } = require('redis');
-      const client = createClient({ url: process.env.REDIS_URL });
-      await client.connect();
-      await client.set(`llms:${storeId}`, content);
-      await client.quit();
-    } else {
-      if (!global.llmsStore) global.llmsStore = {};
-      global.llmsStore[storeId] = content;
-    }
+    await saveToRedis(`llms:${storeId}`, content);
 
     // Paso 3: Crear/actualizar página en Tiendanube (contenido on-domain)
     const htmlContent = llmsToHtml(content);

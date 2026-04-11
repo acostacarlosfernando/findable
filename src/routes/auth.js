@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+const { saveToRedis, tiendanubeHeaders, TIENDANUBE_API } = require('../utils');
 const router = express.Router();
 
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
@@ -48,6 +49,14 @@ router.get('/callback', async (req, res) => {
     req.session.accessToken = access_token;
     req.session.storeId = user_id;
 
+    // Guardar token persistente para webhooks
+    await saveToRedis(`token:${user_id}`, access_token);
+
+    // Registrar webhooks para productos (en background, no bloquea el redirect)
+    registerWebhooks(user_id, access_token, req).catch(e =>
+      console.error('Error registrando webhooks:', e.message)
+    );
+
     // Guardar sesión explícitamente antes de redirigir
     req.session.save((err) => {
       if (err) console.error('Error guardando sesión:', err);
@@ -79,5 +88,39 @@ router.post('/disconnect', (req, res) => {
   req.session.destroy();
   res.json({ ok: true });
 });
+
+// Registrar webhooks para eventos de productos
+async function registerWebhooks(storeId, accessToken, req) {
+  const headers = tiendanubeHeaders(accessToken);
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const webhookUrl = `${baseUrl}/webhooks/product`;
+
+  // Verificar webhooks existentes
+  let existingWebhooks = [];
+  try {
+    const { data } = await axios.get(`${TIENDANUBE_API}/${storeId}/webhooks`, { headers });
+    existingWebhooks = data;
+  } catch (e) {
+    console.log('No se pudieron leer webhooks:', e.response?.status);
+  }
+
+  const events = ['product/created', 'product/updated', 'product/deleted'];
+
+  for (const event of events) {
+    const exists = existingWebhooks.find(w => w.event === event && w.url === webhookUrl);
+    if (exists) continue;
+
+    try {
+      await axios.post(
+        `${TIENDANUBE_API}/${storeId}/webhooks`,
+        { event, url: webhookUrl },
+        { headers }
+      );
+      console.log(`Webhook registrado: ${event}`);
+    } catch (e) {
+      console.error(`Error registrando webhook ${event}:`, e.response?.status, e.response?.data || e.message);
+    }
+  }
+}
 
 module.exports = router;

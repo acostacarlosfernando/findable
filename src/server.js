@@ -5,6 +5,8 @@ const cors = require('cors');
 const path = require('path');
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
+const webhookRoutes = require('./routes/webhooks');
+const { getFromRedis } = require('./utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,16 +54,7 @@ setupSession().then(() => {
   // Ruta pública: servir llms.txt por store ID
   app.get('/llms/:storeId.txt', async (req, res) => {
     try {
-      let content;
-      if (process.env.REDIS_URL) {
-        const { createClient } = require('redis');
-        const client = createClient({ url: process.env.REDIS_URL });
-        await client.connect();
-        content = await client.get(`llms:${req.params.storeId}`);
-        await client.quit();
-      } else {
-        content = global.llmsStore?.[req.params.storeId];
-      }
+      const content = await getFromRedis(`llms:${req.params.storeId}`);
       if (!content) return res.status(404).send('llms.txt not found for this store');
       res.set({
         'Access-Control-Allow-Origin': '*',
@@ -75,6 +68,7 @@ setupSession().then(() => {
 
   app.use('/auth', authRoutes);
   app.use('/api', apiRoutes);
+  app.use('/webhooks', webhookRoutes);
 
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
