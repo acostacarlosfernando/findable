@@ -15,12 +15,28 @@ function getText(obj, lang = 'es') {
 }
 
 function stripHtml(str) {
-  return str.replace(/<[^>]*>/g, '').trim();
+  return str
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Limpiar dominio: quitar protocolo si viene incluido
+function cleanDomain(domain) {
+  return domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
 function getCustomDomain(store) {
   const custom = (store.domains || []).find(d => !d.includes('.mitiendanube.com') && !d.includes('.nuvemshop.com'));
-  return custom || store.original_domain || store.main_domain || '';
+  const raw = custom || store.original_domain || store.main_domain || '';
+  return cleanDomain(raw);
 }
 
 // Convertir contenido llms.txt (markdown-like) a HTML semantico
