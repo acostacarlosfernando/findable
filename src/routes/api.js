@@ -172,8 +172,9 @@ router.get('/generate', requireAuth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error generando llms.txt:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Error al generar llms.txt' });
+    const detail = error.response?.data || error.message;
+    console.error('Error generando llms.txt:', error.response?.status, detail);
+    res.status(500).json({ error: `Error al generar: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}` });
   }
 });
 

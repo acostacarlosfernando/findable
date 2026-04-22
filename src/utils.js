@@ -75,17 +75,27 @@ function llmsToHtml(content) {
 // Generar contenido llms.txt a partir de datos de Tiendanube
 async function generateContent(storeId, accessToken) {
   const headers = tiendanubeHeaders(accessToken);
+  const timeout = 30000; // 30 segundos
 
-  const [storeRes, productsRes] = await Promise.all([
-    axios.get(`${TIENDANUBE_API}/${storeId}/store`, { headers }),
-    axios.get(`${TIENDANUBE_API}/${storeId}/products`, {
-      headers,
-      params: { per_page: 200, fields: 'id,name,description,handle,variants,images,categories' }
-    })
-  ]);
-
+  // Obtener store
+  const storeRes = await axios.get(`${TIENDANUBE_API}/${storeId}/store`, { headers, timeout });
   const store = storeRes.data;
-  const products = productsRes.data;
+
+  // Obtener productos con paginacion
+  const products = [];
+  let page = 1;
+  const perPage = 200;
+  while (true) {
+    const { data } = await axios.get(`${TIENDANUBE_API}/${storeId}/products`, {
+      headers,
+      timeout,
+      params: { page, per_page: perPage, fields: 'id,name,description,handle,variants,images,categories' }
+    });
+    if (!data || !data.length) break;
+    products.push(...data);
+    if (data.length < perPage) break;
+    page++;
+  }
 
   let pages = [];
   try {
