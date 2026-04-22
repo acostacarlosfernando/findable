@@ -300,6 +300,50 @@
       font-weight: 600;
     }
 
+    /* Animacion de exito en step-number */
+    .step-number.done {
+      animation: stepComplete 0.6s ease-out;
+    }
+
+    @keyframes stepComplete {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.4); }
+      50% { transform: scale(0.9); }
+      70% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+
+    /* Particulas de celebracion */
+    .sparkle-container {
+      position: absolute;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    .sparkle {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      animation: sparkleAnim 0.8s ease-out forwards;
+    }
+
+    @keyframes sparkleAnim {
+      0% { transform: translate(0, 0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+    }
+
+    /* Glow pulse en step completado */
+    .step.step-glow {
+      animation: glowPulse 0.8s ease-out;
+    }
+
+    @keyframes glowPulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.4); }
+      50% { box-shadow: 0 0 20px 8px rgba(0, 184, 148, 0.2); }
+      100% { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    }
+
     @media (max-width: 600px) {
       .container { margin: 20px auto; }
       .step { padding: 20px; }
@@ -453,12 +497,14 @@
       checkAuthStatus();
     });
 
+    let justConnected = new URLSearchParams(window.location.search).get('connected') === 'true';
+
     async function checkAuthStatus() {
       try {
         const res = await fetch('/auth/status');
         const data = await res.json();
         if (data.connected) {
-          showConnected();
+          showConnected(justConnected);
           loadStoreInfo();
         }
       } catch (e) {
@@ -486,12 +532,13 @@
       }
     }
 
-    function showConnected() {
+    function showConnected(withCelebration) {
       document.getElementById('connect-section').classList.add('hidden');
       document.getElementById('connected-section').classList.remove('hidden');
       document.getElementById('step-1-num').textContent = '\u2713';
       document.getElementById('step-1-num').classList.add('done');
       document.getElementById('step-2').classList.remove('disabled');
+      if (withCelebration) celebrateStep(1);
     }
 
     async function generateFile() {
@@ -516,6 +563,7 @@
         document.getElementById('step-2-num').textContent = '\u2713';
         document.getElementById('step-2-num').classList.add('done');
         document.getElementById('step-3').classList.remove('disabled');
+        celebrateStep(2);
 
         btn.innerHTML = 'Regenerar archivo';
         btn.disabled = false;
@@ -613,6 +661,7 @@
         el.innerHTML = html;
         document.getElementById('step-3-num').textContent = '\u2713';
         document.getElementById('step-3-num').classList.add('done');
+        celebrateStep(3);
       } else {
         el.className = 'publish-result alert-error';
         el.textContent = data.message;
@@ -651,6 +700,75 @@
     function formatBytes(bytes) {
       if (bytes < 1024) return bytes + ' B';
       return (bytes / 1024).toFixed(1) + ' KB';
+    }
+
+    // --- Celebraciones ---
+
+    // Sonido de exito con Web Audio API
+    function playSuccessSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 (acorde mayor)
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + i * 0.1);
+          osc.stop(ctx.currentTime + i * 0.1 + 0.5);
+        });
+        setTimeout(() => ctx.close(), 1500);
+      } catch (e) { /* Audio no soportado */ }
+    }
+
+    // Particulas de destellos
+    function spawnSparkles(element) {
+      const rect = element.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const container = document.createElement('div');
+      container.className = 'sparkle-container';
+      container.style.left = cx + 'px';
+      container.style.top = cy + 'px';
+      document.body.appendChild(container);
+
+      const colors = ['#FFD700', '#00b894', '#6c5ce7', '#fd79a8', '#ffeaa7', '#55efc4'];
+      for (let i = 0; i < 14; i++) {
+        const spark = document.createElement('div');
+        spark.className = 'sparkle';
+        const angle = (Math.PI * 2 * i) / 14 + (Math.random() - 0.5) * 0.5;
+        const dist = 30 + Math.random() * 40;
+        spark.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+        spark.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+        spark.style.background = colors[Math.floor(Math.random() * colors.length)];
+        spark.style.width = (4 + Math.random() * 4) + 'px';
+        spark.style.height = spark.style.width;
+        spark.style.animationDuration = (0.5 + Math.random() * 0.4) + 's';
+        container.appendChild(spark);
+      }
+
+      setTimeout(() => container.remove(), 1200);
+    }
+
+    // Efecto completo de celebracion
+    function celebrateStep(stepNumber) {
+      const numEl = document.getElementById(`step-${stepNumber}-num`);
+      const stepEl = document.getElementById(`step-${stepNumber}`);
+
+      // Sparkles
+      spawnSparkles(numEl);
+
+      // Glow en el step
+      stepEl.classList.add('step-glow');
+      setTimeout(() => stepEl.classList.remove('step-glow'), 1000);
+
+      // Sonido
+      playSuccessSound();
     }
   </script>
 </body>

@@ -178,7 +178,7 @@ router.get('/generate', requireAuth, async (req, res) => {
 });
 
 // POST /api/publish/tiendanube - Publicar llms.txt (página en dominio + archivo TXT externo)
-router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res) => {
+router.post('/publish/tiendanube', requireAuth, express.json({ limit: '2mb' }), async (req, res) => {
   const { content } = req.body;
   if (!content) return res.status(400).json({ error: 'No hay contenido para publicar' });
 
@@ -308,7 +308,7 @@ router.post('/publish/tiendanube', requireAuth, express.json(), async (req, res)
 });
 
 // POST /api/publish/ftp - Subir llms.txt por FTP al servidor propio
-router.post('/publish/ftp', requireAuth, express.json(), async (req, res) => {
+router.post('/publish/ftp', requireAuth, express.json({ limit: '2mb' }), async (req, res) => {
   const { content, host, user, password, path: remotePath } = req.body;
 
   if (!content) return res.status(400).json({ error: 'No hay contenido para publicar' });
