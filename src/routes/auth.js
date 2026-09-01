@@ -78,8 +78,8 @@ router.get('/callback', async (req, res) => {
 // Verificar estado de conexión
 router.get('/status', (req, res) => {
   res.json({
-    connected: !!(req.session.accessToken && req.session.storeId),
-    storeId: req.session.storeId || null
+    connected: !!(req.session?.accessToken && req.session?.storeId),
+    storeId: req.session?.storeId || null
   });
 });
 

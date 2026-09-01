@@ -16,27 +16,34 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Sesiones: Redis si disponible, sino memoria
-async function setupSession() {
-  let sessionStore;
-
-  if (process.env.REDIS_URL) {
-    try {
-      const { createClient } = require('redis');
-      const { RedisStore } = require('connect-redis');
-      const redisClient = createClient({ url: process.env.REDIS_URL });
-      await redisClient.connect();
-      sessionStore = new RedisStore({ client: redisClient });
-      console.log('Sesiones: usando Redis');
-    } catch (e) {
-      console.error('Redis no disponible, usando memoria:', e.message);
-    }
-  } else {
+async function getSessionStore() {
+  if (!process.env.REDIS_URL) {
     console.log('Sesiones: usando memoria (no hay REDIS_URL)');
+    return undefined;
   }
+  try {
+    const { createClient } = require('redis');
+    const { RedisStore } = require('connect-redis');
+    const redisClient = createClient({
+      url: process.env.REDIS_URL,
+      socket: { connectTimeout: 5000, reconnectStrategy: (retries) => retries > 3 ? false : 1000 }
+    });
+    redisClient.on('error', (err) => console.error('Redis error:', err.message));
+    await Promise.race([
+      redisClient.connect(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis connect timeout (5s)')), 5000))
+    ]);
+    console.log('Sesiones: usando Redis');
+    return new RedisStore({ client: redisClient });
+  } catch (e) {
+    console.error('Redis no disponible, usando memoria:', e.message);
+    return undefined;
+  }
+}
 
+getSessionStore().then((store) => {
   app.use(session({
-    store: sessionStore,
+    store,
     secret: process.env.SESSION_SECRET || 'findable-dev-secret',
     resave: true,
     saveUninitialized: true,
@@ -47,11 +54,7 @@ async function setupSession() {
       maxAge: 24 * 60 * 60 * 1000
     }
   }));
-}
 
-setupSession().then(() => {
-
-  // Ruta pública: servir llms.txt por store ID
   app.get('/llms/:storeId.txt', async (req, res) => {
     try {
       const content = await getFromRedis(`llms:${req.params.storeId}`);
@@ -77,4 +80,7 @@ setupSession().then(() => {
   app.listen(PORT, () => {
     console.log(`Findable corriendo en http://localhost:${PORT}`);
   });
+}).catch((e) => {
+  console.error('Error fatal en setup:', e.message);
+  process.exit(1);
 });

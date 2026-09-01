@@ -151,26 +151,48 @@ async function generateContent(storeId, accessToken) {
 // Guardar contenido en Redis o memoria
 async function saveToRedis(key, value) {
   if (process.env.REDIS_URL) {
-    const { createClient } = require('redis');
-    const client = createClient({ url: process.env.REDIS_URL });
-    await client.connect();
-    await client.set(key, value);
-    await client.quit();
+    try {
+      const { createClient } = require('redis');
+      const client = createClient({
+        url: process.env.REDIS_URL,
+        socket: { connectTimeout: 5000 }
+      });
+      await Promise.race([
+        client.connect(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), 5000))
+      ]);
+      await client.set(key, value);
+      await client.quit();
+    } catch (e) {
+      console.error('Redis save error, usando memoria:', e.message);
+      if (!global.kvStore) global.kvStore = {};
+      global.kvStore[key] = value;
+    }
   } else {
     if (!global.kvStore) global.kvStore = {};
     global.kvStore[key] = value;
   }
 }
 
-// Leer valor de Redis o memoria
 async function getFromRedis(key) {
   if (process.env.REDIS_URL) {
-    const { createClient } = require('redis');
-    const client = createClient({ url: process.env.REDIS_URL });
-    await client.connect();
-    const value = await client.get(key);
-    await client.quit();
-    return value;
+    try {
+      const { createClient } = require('redis');
+      const client = createClient({
+        url: process.env.REDIS_URL,
+        socket: { connectTimeout: 5000 }
+      });
+      await Promise.race([
+        client.connect(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), 5000))
+      ]);
+      const value = await client.get(key);
+      await client.quit();
+      return value;
+    } catch (e) {
+      console.error('Redis read error, usando memoria:', e.message);
+      return global.kvStore?.[key] || null;
+    }
   }
   return global.kvStore?.[key] || null;
 }
